@@ -5,7 +5,7 @@
   "description": "Records the Google Meet tab (video + both voices) and uploads it to Google Drive.",
   "minimum_chrome_version": "116",
   "permissions": ["tabCapture", "offscreen", "storage", "activeTab", "tabs"],
-  "host_permissions": ["https://meet.google.com/*", "https://api.englishmaile.com/*", "https://www.googleapis.com/*"],
+  "host_permissions": ["https://meet.google.com/*", "https://api.englishmaile.com/*", "https://www.googleapis.com/*", "http://localhost:8080/*"],
   "background": { "service_worker": "background.js" },
   "action": { "default_title": "Meetle Recorder", "default_popup": "popup.html" }
 }
