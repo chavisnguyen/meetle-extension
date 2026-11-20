@@ -1,24 +1,69 @@
-# Meetle Recorder (Chrome extension)
+# Meetle Recorder
 
-Records the Google Meet tab from inside the teacher's own browser (video + student's voice + teacher's mic, mixed) and uploads it to Google Drive.
-A 1-on-1 class stays a 2-person call, so Meet's 60-minute cap for 3+ people does not apply (the bot made it 3).
+Extension Chrome ghi hình buổi học trên **Google Meet** của [englishmaile.com](https://englishmaile.com): ghi cả hình, giọng học viên và giọng giáo viên, rồi tự upload lên Google Drive.
 
-- TypeScript + Vite+ (`vp`), same pnpm/Vite/Vitest family as `repos/englishmaile`. `src/background.ts` starts/stops, `src/offscreen.ts` records (chunks -> IndexedDB, upload on stop, recovery on Chrome start), `src/lib/upload.ts` is the Drive resumable upload, `public/manifest.json` is copied as is.
-- Build: `pnpm install && pnpm build` -> `dist/`. Load: `chrome://extensions` > Developer mode > Load unpacked > the **`dist/`** folder. The first time, the popup opens a Google sign-in window that returns to the API.
-- Checks: `pnpm check` (format + lint), `pnpm exec tsc --noEmit`, `pnpm test` (unit), `pnpm e2e` (real Chromium against a fake API and Drive; needs `pnpm exec playwright install chromium` once). `scripts/smoke.sh` is the API + real Drive check. See `TESTING.md`.
-- What no automated test covers: `tabCapture` (needs a toolbar click) and a real Meet call.
+Ghi ngay trong trình duyệt của giáo viên nên không cần ai vào phòng thêm. Lớp 1-1 vẫn là cuộc gọi 2 người, không dính giới hạn 60 phút của Meet dành cho cuộc gọi từ 3 người.
 
-## API contract (built in `repos/englishmaile-api`, `internal/api/extension_handlers.go`)
+## Cài đặt (giáo viên)
 
-Sign-in: `chrome.identity.launchWebAuthFlow` opens `GET /extension/login?redirect=<chromiumapp.org URL>`, which sends the browser to Google. Google comes back to the API's **one** callback `/api/google/callback` (the same one the admin's "Connect Google" uses; the OAuth `state` says whose sign-in it is). For a teacher the API checks the email is in the **active** teachers, and redirects to the extension with `#token=<random>` (30 days, signed with HMAC using the Google client secret; nothing is stored) or `?error=not_a_teacher|login_failed`.
-Every other call sends `Authorization: Bearer <that token>` (401 = unknown/expired, 403 `not_a_teacher` = no longer an active teacher). Unknown JSON fields are refused.
+1. **[Tải bản mới nhất](https://github.com/chavisnguyen/meetle-extension/releases/latest/download/meetle-recorder.zip)** và giải nén vào một thư mục cố định (đừng xoá thư mục này, Chrome đọc extension từ đó).
+2. Mở `chrome://extensions`, bật **Developer mode** (góc trên bên phải).
+3. Bấm **Load unpacked** và chọn thư mục vừa giải nén.
+4. Bấm biểu tượng ghim extension lên thanh công cụ cho tiện.
 
-- `GET /extension/sessions?meetUrl=` -> `{className,sessions[],suggestedId}`: what the popup shows, the suggested lesson pre-selected.
-- `POST /extension/uploads` `{meetUrl,startedAt(ms),size,mimeType:"video/webm"}` -> `{sessionId,folderId,uploadUrl}`. Finds the class by the Meet code in its link; if none has it, the file goes into the Drive folder `Other` (made on first use) as `Meet <code> <date time>.webm` and `sessionId` is empty (nothing to complete). Otherwise it picks the lesson nearest `startedAt` (or makes one), makes the Drive folder named like the bot's and opens a resumable upload.
-- The extension PUTs the file to `uploadUrl` (no credential needed), Drive answers with the file's `id`.
-- `POST /extension/sessions/{sessionId}/complete` `{folderId,fileId,durationSeconds}` -> marks the lesson `completed` with the Drive links.
-  No Drive credential ever lives in the extension.
+Chrome sẽ hiện cảnh báo "extension chế độ nhà phát triển" mỗi lần mở trình duyệt. Bình thường, cứ đóng đi.
 
-## One-time Google setup (owner)
+## Dùng
 
-None: it uses the OAuth client and the redirect URI the admin's "Connect Google" already has (`API_PUBLIC_URL/api/google/callback`). The `openid email` scope it asks for needs no verification. While the OAuth consent screen is in Testing, the teachers' emails must be listed as test users.
+1. Bấm biểu tượng extension, chọn **Đăng nhập bằng Google** bằng tài khoản Google của giáo viên. Email này phải có trong danh sách giáo viên đang dạy do admin quản lý, nếu không popup sẽ báo lỗi.
+2. Mở tab Meet của buổi học và bấm biểu tượng extension. Popup nhận ra lớp và gợi ý buổi học gần giờ nhất; nếu sai thì chọn lại.
+3. Bấm **Ghi lại tab này**. Lần đầu Chrome hỏi quyền micro: cho phép rồi bấm lại.
+4. Học xong bấm **Dừng & upload** và chờ "Đã upload lên Drive". Đóng tab Meet giữa chừng cũng tự dừng và upload.
+
+Meet không thuộc lớp nào trong hệ thống vẫn ghi được. Popup sẽ cảnh báo và bản ghi vào thư mục **Other** trên Drive.
+
+Trình duyệt tắt đột ngột hay mất mạng: video vẫn nằm trong Chrome và tự upload tiếp ở lần mở Chrome sau.
+
+## Cập nhật
+
+Extension không tự cập nhật. Chân popup ghi số phiên bản đang cài. Có bản mới thì tải lại file zip ở trên, giải nén đè lên thư mục cũ rồi bấm biểu tượng reload của extension ở `chrome://extensions`.
+
+## Cách hoạt động
+
+- `src/background.ts`: đăng nhập, bắt đầu và dừng ghi, mở trang ghi.
+- `src/offscreen.ts`: ghi tab Meet trộn với micro, lưu từng đoạn vào IndexedDB, upload khi dừng, tiếp tục các bản dang dở khi Chrome mở lại.
+- `src/lib/upload.ts`: upload Drive kiểu resumable. Video đi thẳng từ trình duyệt lên Drive, không qua máy chủ.
+- `src/popup.ts`, `popup.html`: giao diện.
+
+Đăng nhập: `chrome.identity.launchWebAuthFlow` mở `api.englishmaile.com/extension/login`, chuyển sang Google, rồi về lại API. API chỉ cho email của giáo viên đang dạy vào và đưa cho extension một token riêng (30 ngày), kèm trong mọi lệnh gọi sau đó. Extension không cầm thông tin đăng nhập Drive nào: API tạo sẵn link upload.
+
+API (`/extension/*`):
+
+| Lệnh                                     | Việc                                                                                   |
+| ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| `GET /extension/login?redirect=`         | bắt đầu đăng nhập Google, cuối cùng redirect về extension với `#token=` hoặc `?error=` |
+| `GET /extension/sessions?meetUrl=`       | lớp của link Meet và các buổi quanh hôm nay (`other: true` nếu không thuộc lớp nào)    |
+| `POST /extension/uploads`                | tạo thư mục Drive và link upload cho bản ghi                                           |
+| `POST /extension/sessions/{id}/complete` | đánh dấu buổi học đã ghi, kèm link Drive                                               |
+
+## Phát triển
+
+```bash
+pnpm install
+pnpm dev            # build lại khi sửa file
+pnpm build          # ra dist/, nạp thư mục dist/ bằng Load unpacked
+pnpm check          # định dạng + lint
+pnpm exec tsc --noEmit
+pnpm test           # unit test
+pnpm e2e            # Chromium thật với API và Drive giả (cần: pnpm exec playwright install chromium)
+```
+
+Chưa có test tự động cho `tabCapture` (cần bấm biểu tượng thật) và cuộc gọi Meet thật. Xem `TESTING.md` để thử tay từng bước.
+
+Muốn trỏ extension về API chạy local, trong console của service worker (`chrome://extensions` > Inspect views): `chrome.storage.local.set({apiBase: "http://localhost:8080"})`.
+
+### Phát hành
+
+Sửa xong, **tăng `version` ở cả `public/manifest.json` và `package.json`** rồi push lên `main`. `.github/workflows/release.yml` kiểm tra, build, nén `dist/` thành `meetle-recorder.zip` và tạo release `v<version>`. Link "Tải bản mới nhất" ở trên luôn trỏ tới bản đó. Version đã có release thì workflow bỏ qua, nên quên tăng version thì sẽ không ra bản mới.
+
+ID của extension cố định nhờ trường `key` trong `manifest.json` (là public key), nên giống nhau trên mọi máy.
