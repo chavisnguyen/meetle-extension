@@ -1,9 +1,20 @@
 import { DEFAULT_API, type Config, type ToBackground, type ToOffscreen } from "./lib/types";
 
 const OFFSCREEN = "offscreen.html";
-const config = () =>
-  chrome.storage.local.get({ apiBase: DEFAULT_API, token: "" }) as Promise<Config>;
+const config = async (): Promise<Config> => ({
+  apiBase: ((await chrome.storage.local.get({ apiBase: DEFAULT_API })) as Config).apiBase,
+});
 const toOffscreen = (m: ToOffscreen) => chrome.runtime.sendMessage(m);
+
+/** The access token of the Google account Chrome is signed in to; the API turns it into an email. */
+async function googleToken(interactive: boolean, fresh = false) {
+  let { token } = await chrome.identity.getAuthToken({ interactive });
+  if (fresh && token) {
+    await chrome.identity.removeCachedAuthToken({ token });
+    ({ token } = await chrome.identity.getAuthToken({ interactive }));
+  }
+  return token;
+}
 
 async function ensureOffscreen() {
   if (await chrome.offscreen.hasDocument()) return;
@@ -15,8 +26,7 @@ async function ensureOffscreen() {
 }
 
 async function startRecording(m: Extract<ToBackground, { type: "start" }>) {
-  const c = await config();
-  if (!c.token) return { error: "Chưa nhập mật khẩu (mở popup > Cài đặt)." };
+  if (!(await googleToken(true))) return { error: "Chưa đăng nhập Google trong Chrome." };
   const mic = await navigator.permissions.query({ name: "microphone" as PermissionName });
   if (mic.state !== "granted") {
     await chrome.tabs.create({ url: chrome.runtime.getURL("mic.html") });
@@ -30,15 +40,23 @@ async function startRecording(m: Extract<ToBackground, { type: "start" }>) {
     streamId,
     meetUrl: m.tab.url,
     sessionId: m.sessionId,
-    cfg: c,
+    cfg: await config(),
   });
   return { ok: true };
 }
 
-chrome.runtime.onMessage.addListener((m: ToBackground, _sender, reply) => {
+chrome.runtime.onMessage.addListener((m: ToBackground | ToOffscreen, _sender, reply) => {
+  if ("target" in m) return false; // meant for the offscreen page
   if (m.type === "start") {
     startRecording(m).then(reply, (e: Error) => reply({ error: e.message }));
     return true; // async reply
+  }
+  if (m.type === "token") {
+    googleToken(true, m.fresh).then(
+      (token) => reply({ token }),
+      () => reply({ token: undefined }),
+    );
+    return true;
   }
   if (m.type === "stop") void toOffscreen({ target: "offscreen", type: "stop" });
   if (m.type === "status")
@@ -47,9 +65,9 @@ chrome.runtime.onMessage.addListener((m: ToBackground, _sender, reply) => {
 });
 
 // A crash or a closed browser leaves chunks behind: finish and upload them when Chrome starts again.
+// Quietly: no sign-in window pops up at startup, so without a cached sign-in the leftover waits for the next recording.
 chrome.runtime.onStartup.addListener(async () => {
-  const c = await config();
-  if (!c.token) return;
+  if (!(await googleToken(false).catch(() => undefined))) return;
   await ensureOffscreen();
-  await toOffscreen({ target: "offscreen", type: "recover", cfg: c });
+  await toOffscreen({ target: "offscreen", type: "recover", cfg: await config() });
 });

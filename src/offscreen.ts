@@ -11,6 +11,10 @@ let cleanup = () => {};
 
 const say = (text: string, recording?: boolean) =>
   chrome.runtime.sendMessage({ type: "status", text, recording });
+const bearer = async (fresh: boolean) =>
+  cfg.token ??
+  ((await chrome.runtime.sendMessage({ type: "token", fresh })) as { token?: string } | undefined)
+    ?.token;
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 chrome.runtime.onMessage.addListener((m: ToOffscreen) => {
@@ -117,12 +121,20 @@ async function start(m: Extract<ToOffscreen, { type: "start" }>) {
 async function upload(meta: Meta) {
   const blob = new Blob(await getChunks(meta.sid), { type: "video/webm" });
   if (!blob.size) throw new Error("bản ghi rỗng");
-  const call = (path: string, body: object) =>
+  const send = async (path: string, body: object, fresh: boolean) =>
     fetch(`${cfg.apiBase}${path}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${await bearer(fresh)}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(body),
     });
+  // A token that is a minute from expiring is refused: ask for a fresh one once and try again.
+  const call = async (path: string, body: object) => {
+    const r = await send(path, body, false);
+    return r.status === 401 ? send(path, body, true) : r;
+  };
   const r = await call("/extension/uploads", {
     meetUrl: meta.meetUrl,
     sessionId: meta.sessionId || "",

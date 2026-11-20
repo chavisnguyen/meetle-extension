@@ -4,13 +4,24 @@
   "version": "0.1.0",
   "description": "Records the Google Meet tab (video + both voices) and uploads it to Google Drive.",
   "minimum_chrome_version": "116",
-  "permissions": ["tabCapture", "offscreen", "storage", "activeTab", "tabs"],
+  "permissions": ["activeTab", "identity", "offscreen", "storage", "tabCapture", "tabs"],
   "host_permissions": [
     "https://meet.google.com/*",
     "https://api.englishmaile.com/*",
     "https://www.googleapis.com/*",
     "http://localhost/*"
   ],
-  "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_title": "Meetle Recorder", "default_popup": "popup.html" }
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Meetle Recorder",
+    "default_popup": "popup.html"
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqg1dYKrffGe8pvUzKti1a2VYXu3acbU3DwXi6ceKPqLFq0xIkv0qkJkNXPLgF9KJrXNsRXsv+29Osk0NXTPJiN/8L7Ja9yBzvVYyjaJPNJYMZW3OrlBygnr6w9+QxXh4zhjkEl+GQz/yDtueN1jMFnlx8bcqHZj3G4ZwlFNrq7F7Ie8ZPBNbWH+6Hy860JwUnlKtnMedT+QgMSZY8sc8jMg2LJAsw6l+GUXi6GIp+cWojIP5Rowp2NJhGpubdYkq3So+nNeRg+2eQ5HG06T8JmmPvDykRv3X1yWdC/ACIzI+syvhYiyR/QdSIdBOVK5eWplAd6HBvdtk9kcEj4HM8QIDAQAB",
+  "oauth2": {
+    "client_id": "PASTE-CLIENT-ID.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/userinfo.email"]
+  }
 }

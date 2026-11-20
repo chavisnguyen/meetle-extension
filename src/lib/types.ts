@@ -2,7 +2,8 @@ export const DEFAULT_API = "https://api.englishmaile.com";
 
 export interface Config {
   apiBase: string;
-  token: string;
+  /** Tests only: a ready-made bearer token. Normally the offscreen page asks the background for a Google one. */
+  token?: string;
 }
 
 /** What is kept in IndexedDB about one recording, next to its chunks. */
@@ -32,4 +33,6 @@ export type ToOffscreen =
 export type ToBackground =
   | { type: "start"; tab: { id: number; url: string }; sessionId: string }
   | { type: "stop" }
-  | { type: "status"; text: string; recording?: boolean };
+  | { type: "status"; text: string; recording?: boolean }
+  /** The signed-in Google account's access token; `fresh` drops the cached one first (the API refused it). */
+  | { type: "token"; fresh?: boolean };

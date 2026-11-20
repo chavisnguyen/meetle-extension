@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { createServer, type IncomingMessage } from "node:http";
 import { chromium, type BrowserContext } from "playwright";
 
-const PASSWORD = "p".repeat(32);
+const TOKEN = "tok:teacher@example.com"; // what the fake API accepts as a signed-in active teacher
 const MEET = "https://meet.google.com/abc-defg-hij";
 
 // --- the fake API + Drive -----------------------------------------------------------------------------------------
@@ -46,8 +46,7 @@ const server = createServer(async (req, res) => {
     }
     return send(308, {}, { Range: `bytes=0-${m[2]}` });
   }
-  if (req.headers.authorization !== `Bearer ${PASSWORD}`)
-    return send(401, { error: "unauthorized" });
+  if (req.headers.authorization !== `Bearer ${TOKEN}`) return send(401, { error: "unauthorized" });
   if (path === "/extension/uploads") {
     const sent = JSON.parse(body.toString()) as Record<string, unknown>;
     assert.equal(sent.meetUrl, MEET);
@@ -100,7 +99,7 @@ const startRecording = async (context: BrowserContext, id: string) => {
         cfg: { apiBase, token },
         fake: true,
       }),
-    [base, PASSWORD, MEET],
+    [base, TOKEN, MEET],
   );
   return { offscreen, popup };
 };
@@ -167,7 +166,7 @@ async function main() {
   await again.evaluate(
     ([apiBase, token]) =>
       chrome.runtime.sendMessage({ target: "offscreen", type: "recover", cfg: { apiBase, token } }),
-    [base, PASSWORD],
+    [base, TOKEN],
   );
   await until("recovery upload", () => completed.length > 0);
   checkUploaded();

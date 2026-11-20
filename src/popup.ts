@@ -16,34 +16,29 @@ const show = async () => {
 chrome.storage.onChanged.addListener(show);
 void show();
 
-const stored = () =>
-  chrome.storage.local.get({ apiBase: DEFAULT_API, token: "" }) as Promise<Config>;
+const stored = () => chrome.storage.local.get({ apiBase: DEFAULT_API }) as Promise<Config>;
 void stored().then((c) => {
   $<HTMLInputElement>("api").value = c.apiBase;
-  $<HTMLInputElement>("tok").value = c.token;
 });
-for (const id of ["api", "tok"]) {
-  $(id).onchange = () =>
-    chrome.storage.local.set({
-      apiBase: $<HTMLInputElement>("api").value.replace(/\/$/, ""),
-      token: $<HTMLInputElement>("tok").value,
-    });
-}
+$("api").onchange = () =>
+  chrome.storage.local.set({ apiBase: $<HTMLInputElement>("api").value.replace(/\/$/, "") });
 
 const activeTab = async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
 
 // Ask the server which lesson this Meet is: its guess is pre-selected, the teacher only changes it when it is wrong.
 async function loadLessons() {
   const tab = await activeTab();
-  const c = await stored();
-  if (!c.token || !tab.url?.startsWith(MEET)) return;
+  if (!tab.url?.startsWith(MEET)) return;
   try {
+    const { token } = await chrome.identity.getAuthToken({ interactive: true });
     const r = await fetch(
-      `${c.apiBase}/extension/sessions?meetUrl=${encodeURIComponent(tab.url)}`,
-      {
-        headers: { Authorization: `Bearer ${c.token}` },
-      },
+      `${(await stored()).apiBase}/extension/sessions?meetUrl=${encodeURIComponent(tab.url)}`,
+      { headers: { Authorization: `Bearer ${token}` } },
     );
+    if (r.status === 401 || r.status === 403) {
+      $("cls").textContent = "Email Chrome này chưa có trong danh sách giáo viên đang dạy.";
+      return;
+    }
     if (r.status === 409) {
       $("cls").textContent = "Link Meet này chưa thuộc lớp nào.";
       return;
