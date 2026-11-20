@@ -1,0 +1,21 @@
+{
+  "name": "meetle-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vp build",
+    "dev": "vp build --watch",
+    "check": "vp check",
+    "test": "vp test run",
+    "e2e": "vp build && vpx e2e/flow.ts"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.7",
+    "@types/node": "^26.6.6",
+    "playwright": "^1.65.1",
+    "typescript": "^7.0.2",
+    "vite-plus": "^1.7.0"
+  },
+  "packageManager": "pnpm@10.26.0"
+}
