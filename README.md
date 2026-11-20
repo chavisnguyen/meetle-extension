@@ -8,7 +8,7 @@ A 1-on-1 class stays a 2-person call, so Meet's 60-minute cap for 3+ people does
 - Check: `node lib/upload.test.mjs`. The recording path itself needs a real Chrome + a Meet tab (not tested headless).
 
 ## API contract (built in `repos/englishmaile-api`, `internal/api/extension_handlers.go`)
-Both calls send `Authorization: Bearer <EXTENSION_TOKEN>`; unknown JSON fields are refused.
+Both calls send `Authorization: Bearer <EXTENSION_PASSWORD>`; unknown JSON fields are refused.
 - `POST /extension/uploads` `{meetUrl,startedAt(ms),size,mimeType:"video/webm"}` -> `{sessionId,folderId,uploadUrl}`. Finds the class by the Meet code in its link (409 `unknown_meeting` if none), picks the lesson nearest `startedAt` (or makes one), makes the Drive folder named like the bot's and opens a resumable upload.
 - The extension PUTs the file to `uploadUrl` (no credential needed), Drive answers with the file's `id`.
 - `POST /extension/sessions/{sessionId}/complete` `{folderId,fileId,durationSeconds}` -> marks the lesson `completed` with the Drive links.
