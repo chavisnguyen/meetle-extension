@@ -1,0 +1,64 @@
+# Publishes the extension: when the version in public/manifest.json has no release yet, build it and attach
+# meetle-recorder.zip to a release v<version>. The admin's download button points at
+# releases/latest/download/meetle-recorder.zip, so raising the version and pushing is the whole release.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Which version
+        id: v
+        run: |
+          v=$(node -p "require('./public/manifest.json').version")
+          [ "$v" = "$(node -p "require('./package.json').version")" ] || { echo "public/manifest.json and package.json have different versions"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "v$v" >/dev/null 2>&1; then echo "new=false" >> "$GITHUB_OUTPUT"; else echo "new=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Set up pnpm
+        if: steps.v.outputs.new == 'true'
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        if: steps.v.outputs.new == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        if: steps.v.outputs.new == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Check, test, build
+        if: steps.v.outputs.new == 'true'
+        run: |
+          pnpm check
+          pnpm exec tsc --noEmit
+          pnpm test
+          pnpm build
+
+      - name: Release
+        if: steps.v.outputs.new == 'true'
+        run: |
+          (cd dist && zip -qr ../meetle-recorder.zip .)
+          gh release create "v${{ steps.v.outputs.version }}" meetle-recorder.zip \
+            --title "Meetle Recorder v${{ steps.v.outputs.version }}" --generate-notes

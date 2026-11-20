@@ -34,5 +34,5 @@ export type ToBackground =
   | { type: "start"; tab: { id: number; url: string }; sessionId: string }
   | { type: "stop" }
   | { type: "status"; text: string; recording?: boolean }
-  /** The signed-in Google account's access token; `fresh` drops the cached one first (the API refused it). */
+  /** The teacher's token from the API (signs in through Google when there is none); `fresh` drops the cached one first (the API refused it). */
   | { type: "token"; fresh?: boolean };

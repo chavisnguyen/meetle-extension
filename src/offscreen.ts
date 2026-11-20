@@ -142,20 +142,22 @@ async function upload(meta: Meta) {
     size: blob.size,
     mimeType: "video/webm",
   });
-  if (!r.ok)
-    throw new Error(r.status === 409 ? "link Meet này chưa thuộc lớp nào" : `API trả ${r.status}`);
+  if (!r.ok) throw new Error(`API trả ${r.status}`);
   const { sessionId, folderId, uploadUrl } = (await r.json()) as {
     sessionId: string;
     folderId: string;
     uploadUrl: string;
   };
   const file = await uploadBlob(uploadUrl, blob, (p) => say(`Upload ${Math.round(p * 100)}%`));
-  const ok = await call(`/extension/sessions/${sessionId}/complete`, {
-    folderId,
-    fileId: file.id,
-    durationSeconds: Math.round(((meta.endedAt ?? Date.now()) - meta.startedAt) / 1000),
-  });
-  if (!ok.ok) throw new Error(`đã lên Drive nhưng API trả ${ok.status}`);
+  if (sessionId) {
+    // A meeting that is no class's has no lesson to complete: its file in "Other" is all there is.
+    const ok = await call(`/extension/sessions/${sessionId}/complete`, {
+      folderId,
+      fileId: file.id,
+      durationSeconds: Math.round(((meta.endedAt ?? Date.now()) - meta.startedAt) / 1000),
+    });
+    if (!ok.ok) throw new Error(`đã lên Drive nhưng API trả ${ok.status}`);
+  }
   await dropChunks(meta.sid);
   meta.state = "uploaded";
   await putMeta(meta);

@@ -6,13 +6,28 @@ const config = async (): Promise<Config> => ({
 });
 const toOffscreen = (m: ToOffscreen) => chrome.runtime.sendMessage(m);
 
-/** The access token of the Google account Chrome is signed in to; the API turns it into an email. */
+/**
+ * The teacher's token from the API. Signing in sends the browser through Google and back to the API's own callback,
+ * which answers with the token in the #fragment. `fresh` drops the stored one first (the API refused it).
+ */
 async function googleToken(interactive: boolean, fresh = false) {
-  let { token } = await chrome.identity.getAuthToken({ interactive });
-  if (fresh && token) {
-    await chrome.identity.removeCachedAuthToken({ token });
-    ({ token } = await chrome.identity.getAuthToken({ interactive }));
-  }
+  if (fresh) await chrome.storage.local.remove("token");
+  const stored = ((await chrome.storage.local.get("token")) as { token?: string }).token;
+  if (stored || !interactive) return stored;
+  const back = chrome.identity.getRedirectURL("cb");
+  const url = await chrome.identity.launchWebAuthFlow({
+    interactive: true,
+    url: `${(await config()).apiBase}/extension/login?redirect=${encodeURIComponent(back)}`,
+  });
+  const done = new URL(url ?? back);
+  const token = new URLSearchParams(done.hash.slice(1)).get("token");
+  if (!token)
+    throw new Error(
+      done.searchParams.get("error") === "not_a_teacher"
+        ? "Email này chưa có trong danh sách giáo viên đang dạy."
+        : "Đăng nhập Google không thành công.",
+    );
+  await chrome.storage.local.set({ token });
   return token;
 }
 
@@ -26,7 +41,7 @@ async function ensureOffscreen() {
 }
 
 async function startRecording(m: Extract<ToBackground, { type: "start" }>) {
-  if (!(await googleToken(true))) return { error: "Chưa đăng nhập Google trong Chrome." };
+  await googleToken(true); // signs in first when needed; throws a message the popup shows
   const mic = await navigator.permissions.query({ name: "microphone" as PermissionName });
   if (mic.state !== "granted") {
     await chrome.tabs.create({ url: chrome.runtime.getURL("mic.html") });
@@ -54,7 +69,11 @@ chrome.runtime.onMessage.addListener((m: ToBackground | ToOffscreen, _sender, re
   if (m.type === "token") {
     googleToken(true, m.fresh).then(
       (token) => reply({ token }),
-      () => reply({ token: undefined }),
+      (e: Error) => {
+        // The sign-in window closes the popup, so nobody is listening for the reply: keep the reason for the next open.
+        void chrome.storage.session.set({ loginError: e.message });
+        reply({ token: undefined, error: e.message });
+      },
     );
     return true;
   }
